@@ -171,7 +171,7 @@ jobs:
   runtime:
     name: Measure runtime
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: macos-14 # Mac M1; use the mac version of /usr/bin/time for cpu cycles
     steps:
       - uses: taiki-e/checkout-action@v1
 
@@ -181,61 +181,64 @@ jobs:
         with:
           name: transform
 
-      - run: chmod +x ./transform
+      - run: chmod 777 ./transform
       - run: curl https://raw.githubusercontent.com/oxc-project/benchmark-files/main/cal.com.tsx > cal.com.tsx
 
-      - name: Duration
-        id: duration
-        run: |
-          FILE="./cal.com.tsx"
-          hyperfine -i --warmup 10 --export-json output.json "./transform $FILE"
-          DURATION=$(jq '.results[0].mean' output.json)
-          echo "DURATION=$DURATION" >> $GITHUB_OUTPUT
+      # - name: Duration
+        # id: duration
+        # run: |
+          # FILE="./cal.com.tsx"
+          # hyperfine -i --warmup 10 --export-json output.json "./transform $FILE"
+          # DURATION=$(jq '.results[0].mean' output.json)
+          # echo "DURATION=$DURATION" >> $GITHUB_OUTPUT
 
       - name: Max RSS
         id: rss
         run: |
           FILE="./cal.com.tsx"
+          /usr/bin/time -l ./transform $FILE
           hyperfine --warmup 10 --show-output \
-            "/usr/bin/time -al ./transform $FILE > /dev/null" 2>&1 | \
+            "/usr/bin/time -l ./target/release/transform $FILE > /dev/null" 2>&1 | \
             grep "maximum resident set size" | \
             awk '{ print $1 }' \
             > output
+
+          cat output
 
           TOTAL=$(awk '{ total += $1 } END { print total }' output)
           COUNT=$(wc -l output | awk '{ print $1 }')
           AVERAGE=$(echo "$TOTAL $COUNT" | awk '{printf "%.1f", $1 / $2}')
           echo "RSS=$AVERAGE" >> $GITHUB_OUTPUT
 
-      - name: Cycles Elapsed
-        id: cycles
-        run: |
-          FILE="./cal.com.tsx"
-          hyperfine --warmup 10 --show-output \
-            "/usr/bin/time -al ./transform $FILE > /dev/null" 2>&1 | \
-            grep "cycles elapsed" | \
-            awk '{ print $1 }' \
-            > output
+      # - name: Cycles Elapsed
+        # id: cycles
+        # run: |
+          # FILE="./cal.com.tsx"
+          # hyperfine --warmup 10 --show-output \
+            # "/usr/bin/time -l ./transform $FILE > /dev/null" 2>&1 | \
+            # grep "cycles elapsed" | \
+            # awk '{ print $1 }' \
+            # > output
 
-          TOTAL=$(awk '{ total += $1 } END { print total }' output)
-          COUNT=$(wc -l output | awk '{ print $1 }')
-          AVERAGE=$(echo "$TOTAL $COUNT" | awk '{printf "%.1f", $1 / $2}')
-          echo "CYCLES=$AVERAGE" >> $GITHUB_OUTPUT
+          # TOTAL=$(awk '{ total += $1 } END { print total }' output)
+          # COUNT=$(wc -l output | awk '{ print $1 }')
+          # AVERAGE=$(echo "$TOTAL $COUNT" | awk '{printf "%.1f", $1 / $2}')
+          # echo "CYCLES=$AVERAGE" >> $GITHUB_OUTPUT
 
-      - name: Create Data
-        run: |
-          echo $(jq ".[0].value = ${{ steps.duration.outputs.DURATION }}" runtime.json) > data.json
-          echo $(jq ".[1].value = ${{ steps.rss.outputs.RSS }}" data.json) > data.json
-          echo $(jq ".[2].value = ${{ steps.cycles.outputs.CYCLES }}" data.json) > data.json
-          cat data.json
+      # - name: Create Data
+        # run: |
+          # echo $(jq ".[0].value = ${{ steps.duration.outputs.DURATION }}" runtime.json) > data.json
+          # echo $(jq ".[1].value = ${{ steps.rss.outputs.RSS }}" data.json) > data.json
+          # echo $(jq ".[2].value = ${{ steps.cycles.outputs.CYCLES }}" data.json) > data.json
+          # cat data.json
 
-      - uses: benchmark-action/github-action-benchmark@v1
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          name: Transform Runtime Metrics
-          tool: customSmallerIsBetter
-          output-file-path: data.json
-          gh-pages-branch: gh-pages
-          benchmark-data-dir-path: runtime
-          auto-push: true
-          save-data-file: true
+      # - uses: benchmark-action/github-action-benchmark@v1
+        # with:
+          # github-token: ${{ secrets.GITHUB_TOKEN }}
+          # name: Transform Runtime Metrics
+          # tool: customSmallerIsBetter
+          # output-file-path: data.json
+          # gh-pages-branch: gh-pages
+          # benchmark-data-dir-path: runtime
+          # auto-push: true
+          # save-data-file: true
