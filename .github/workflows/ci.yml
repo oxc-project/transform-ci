@@ -1,4 +1,4 @@
-name: Transform CI
+name: CI
 
 on:
   workflow_dispatch:
@@ -11,14 +11,21 @@ on:
   push:
     branches:
       - main
+      - stats
     paths-ignore:
       - '**/*.md'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.ref_name != 'main' }}
 
 jobs:
   build:
     name: Build
     timeout-minutes: 10
     runs-on: ubuntu-latest
+    outputs:
+      size: ${{ steps.run.outputs.BINARY_SIZE }}
     steps:
       - name: Checkout Repository
         uses: taiki-e/checkout-action@v1
@@ -35,10 +42,15 @@ jobs:
       - name: Install Rust
         uses: Boshen/setup-rust@main
         with:
-          save-cache: ${{ github.ref_name == 'main' }}
+          save-cache: true # ${{ github.ref_name == 'main' }}
 
       - name: Build
         run: cargo build --release
+
+      - id: run
+        run: |
+          BINARY_SIZE=$(ls -l ./target/release/transform-ci | awk '{print $5}')
+          echo "BINARY_SIZE=$BINARY_SIZE" >> $GITHUB_OUTPUT
 
       - name: Upload Binary
         uses: actions/upload-artifact@v4
@@ -47,56 +59,105 @@ jobs:
           name: transform-ci
           path: ./target/release/transform-ci
 
-  checkout:
-    name: Read repos.json
-    needs: build
+  # checkout:
+    # name: Read repos.json
+    # needs: build
+    # runs-on: ubuntu-latest
+    # outputs:
+      # matrix: ${{ steps.setmatrix.outputs.content }}
+    # steps:
+      # - uses: taiki-e/checkout-action@v1
+      # - id: setmatrix
+        # uses: jaywcjlove/github-action-read-file@main
+        # with:
+          # localfile: ./matrix.json
+
+  # test:
+    # needs: checkout
+    # timeout-minutes: 30
+    # runs-on: ubuntu-latest
+    # strategy:
+      # fail-fast: false
+      # matrix:
+        # include: ${{ fromJson(needs.checkout.outputs.matrix) }}
+    # name: ${{ matrix.repository }}
+    # steps:
+      # - name: Clone ${{ matrix.repository }}
+        # uses: actions/checkout@v4
+        # with:
+          # repository: ${{ matrix.repository }}
+          # ref: ${{ matrix.ref }}
+
+      # - name: Download Transform Binary
+        # uses: actions/download-artifact@v4
+        # with:
+          # name: transform-ci
+
+      # - name: chmod +x transform-ci
+        # run: chmod +x ./transform-ci
+
+      # - name: Transform
+        # run: ./transform-ci ${{ matrix.transform_directories }}
+
+      # - name: Install pnpm
+        # run: corepack enable
+
+      # - name: Setup Node.js
+        # uses: actions/setup-node@v4
+        # with:
+          # cache: pnpm
+
+      # - name: Install packages
+        # run: pnpm install
+
+      # - name: Check
+        # run: ${{ matrix.command }}
+
+  compile-time:
+    name: Compile Time
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ steps.setmatrix.outputs.content }}
+      time: ${{ steps.run.outputs.COMPILE_TIME }}
     steps:
       - uses: taiki-e/checkout-action@v1
-      - id: setmatrix
-        uses: jaywcjlove/github-action-read-file@main
-        with:
-          localfile: ./matrix.json
-
-  test:
-    needs: checkout
-    timeout-minutes: 30
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJson(needs.checkout.outputs.matrix) }}
-    name: ${{ matrix.repository }}
-    steps:
-      - name: Clone ${{ matrix.repository }}
+      - name: Checkout oxc
         uses: actions/checkout@v4
         with:
-          repository: ${{ matrix.repository }}
-          ref: ${{ matrix.ref }}
+          repository: oxc-project/oxc
+          ref: main
+          path: oxc
+      - run: mv oxc ../oxc
+      - uses: Boshen/setup-rust@main
+      - run: cargo clean # build from scatch using local system cache to avoid download from crates.io
+      - id: run
+        run: |
+          /usr/bin/time -f "%e" -o output cargo build --release
+          cat output
+          COMPILE_TIME=$(cat output)
+          echo $COMPILE_TIME
+          echo "COMPILE_TIME=$COMPILE_TIME" >> $GITHUB_OUTPUT
 
-      - name: Download Artifacts
-        uses: actions/download-artifact@v4
+  monitor:
+    name: Monitor Metrics
+    needs: [build, compile-time]
+    # if: ${{ github.ref_name == 'main' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: taiki-e/checkout-action@v1
+
+      - name: Create Data
+        run: |
+          echo $(jq ".[0].value = ${{ needs.compile-time.outputs.time }}" metrics.json) > data.json
+          echo $(jq ".[1].value = ${{ needs.build.outputs.size }}" data.json) > data.json
+          cat data.json
+
+      - uses: benchmark-action/github-action-benchmark@v1
         with:
-          name: transform-ci
-
-      - name: chmod +x transform-ci
-        run: chmod +x ./transform-ci
-
-      - name: Transform
-        run: ./transform-ci ${{ matrix.transform_directories }}
-
-      - name: Install pnpm
-        run: corepack enable
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          cache: pnpm
-
-      - name: Install packages
-        run: pnpm install
-
-      - name: Check
-        run: ${{ matrix.command }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          name: Oxc Metrics
+          tool: customSmallerIsBetter
+          output-file-path: data.json
+          gh-pages-branch: gh-pages
+          benchmark-data-dir-path: metrics
+          auto-push: true
+          save-data-file: true
