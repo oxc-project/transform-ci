@@ -1,0 +1,17 @@
+[
+    {
+        "name": "Duration",
+        "unit": "ms",
+        "value": 0
+    },
+    {
+        "name": "Maximum Resident Set Size",
+        "unit": "Bytes",
+        "value": 0
+    },
+    {
+        "name": "Cycles Elapsed",
+        "unit": "Cycles",
+        "value": 0
+    }
+]
