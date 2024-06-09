@@ -23,7 +23,7 @@ jobs:
   build:
     name: Build
     timeout-minutes: 10
-    runs-on: ubuntu-latest
+    runs-on: macos-14
     outputs:
       size: ${{ steps.run.outputs.BINARY_SIZE }}
     steps:
@@ -52,22 +52,29 @@ jobs:
           BINARY_SIZE=$(ls -l ./target/release/transform | awk '{print $5}')
           echo "BINARY_SIZE=$BINARY_SIZE" >> $GITHUB_OUTPUT
 
+      - name: Fix Permission Loss
+        run: |
+          mv ./target/release/transform .
+          mv ./target/release/transform_all .
+          tar cvf transform.tar.gz transform
+          tar cvf transform_all.tar.gz transform_all
+
       - uses: actions/upload-artifact@v4
         with:
           if-no-files-found: error
           name: transform
-          path: ./target/release/transform
+          path: transform.tar.gz
 
       - uses: actions/upload-artifact@v4
         with:
           if-no-files-found: error
           name: transform_all
-          path: ./target/release/transform_all
+          path: transform_all.tar.gz
 
   # checkout:
     # name: Read repos.json
     # needs: build
-    # runs-on: ubuntu-latest
+    # runs-on: macos-14
     # outputs:
       # matrix: ${{ steps.setmatrix.outputs.content }}
     # steps:
@@ -80,7 +87,7 @@ jobs:
   # test:
     # needs: checkout
     # timeout-minutes: 30
-    # runs-on: ubuntu-latest
+    # runs-on: macos-14
     # strategy:
       # fail-fast: false
       # matrix:
@@ -97,12 +104,12 @@ jobs:
         # uses: actions/download-artifact@v4
         # with:
           # name: transform_all
-
-      # - name: chmod +x transform_all
-        # run: chmod +x ./transform_all
+          # path: .
 
       # - name: Transform
-        # run: ./transform_all ${{ matrix.transform_directories }}
+        # run: |
+          # tar xf transform_all.tar
+        # ./transform_all ${{ matrix.transform_directories }}
 
       # - name: Install pnpm
         # run: corepack enable
@@ -120,7 +127,7 @@ jobs:
 
   # compile-time:
     # name: Compile Time
-    # runs-on: ubuntu-latest
+    # runs-on: macos-14
     # if: ${{ github.ref_name == 'main' }}
     # outputs:
       # time: ${{ steps.run.outputs.COMPILE_TIME }}
@@ -147,7 +154,7 @@ jobs:
     # name: Monitor Metrics
     # needs: [build, compile-time]
     # if: ${{ github.ref_name == 'main' }}
-    # runs-on: ubuntu-latest
+    # runs-on: macos-14
     # steps:
       # - uses: taiki-e/checkout-action@v1
 
@@ -180,8 +187,11 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: transform
+          path: .
 
-      - run: chmod 777 ./transform
+      - run: ls -lh
+      - run: tar xf transform.tar.gz
+      - run: ls -lh
       - run: curl https://raw.githubusercontent.com/oxc-project/benchmark-files/main/cal.com.tsx > cal.com.tsx
 
       # - name: Duration
@@ -190,6 +200,7 @@ jobs:
           # FILE="./cal.com.tsx"
           # hyperfine -i --warmup 10 --export-json output.json "./transform $FILE"
           # DURATION=$(jq '.results[0].mean' output.json)
+          # echo $DURATION
           # echo "DURATION=$DURATION" >> $GITHUB_OUTPUT
 
       - name: Max RSS
@@ -198,7 +209,7 @@ jobs:
           FILE="./cal.com.tsx"
           /usr/bin/time -l ./transform $FILE
           hyperfine --warmup 10 --show-output \
-            "/usr/bin/time -l ./target/release/transform $FILE > /dev/null" 2>&1 | \
+            "/usr/bin/time -l ./transform $FILE" 2>&1 | \
             grep "maximum resident set size" | \
             awk '{ print $1 }' \
             > output
@@ -208,22 +219,31 @@ jobs:
           TOTAL=$(awk '{ total += $1 } END { print total }' output)
           COUNT=$(wc -l output | awk '{ print $1 }')
           AVERAGE=$(echo "$TOTAL $COUNT" | awk '{printf "%.1f", $1 / $2}')
+          echo $AVERAGE
           echo "RSS=$AVERAGE" >> $GITHUB_OUTPUT
 
-      # - name: Cycles Elapsed
-        # id: cycles
-        # run: |
-          # FILE="./cal.com.tsx"
-          # hyperfine --warmup 10 --show-output \
-            # "/usr/bin/time -l ./transform $FILE > /dev/null" 2>&1 | \
-            # grep "cycles elapsed" | \
-            # awk '{ print $1 }' \
-            # > output
+      - name: Cycles Elapsed
+        id: cycles
+        run: |
+          FILE="./cal.com.tsx"
+          /usr/bin/time -l ./transform $FILE
+          hyperfine --warmup 10 --show-output \
+            "/usr/bin/time -l ./transform $FILE" 2>&1 | \
+            grep "cycles elapsed" | \
+            awk '{ print $1 }' \
+            > output
 
-          # TOTAL=$(awk '{ total += $1 } END { print total }' output)
-          # COUNT=$(wc -l output | awk '{ print $1 }')
-          # AVERAGE=$(echo "$TOTAL $COUNT" | awk '{printf "%.1f", $1 / $2}')
-          # echo "CYCLES=$AVERAGE" >> $GITHUB_OUTPUT
+          cat output
+
+          TOTAL=$(awk '{ total += $1 } END { print total }' output)
+          COUNT=$(wc -l output | awk '{ print $1 }')
+
+          echo $TOTAL
+          echo $COUNT
+
+          AVERAGE=$(echo "$TOTAL $COUNT" | awk '{printf "%.1f", $1 / $2}')
+          echo $AVERAGE
+          echo "CYCLES=$AVERAGE" >> $GITHUB_OUTPUT
 
       # - name: Create Data
         # run: |
