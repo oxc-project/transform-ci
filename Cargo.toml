@@ -3,6 +3,14 @@ name = "transform-ci"
 version = "0.0.0"
 edition = "2021"
 
+[[bin]]
+name = "transform"
+path = "src/transform.rs"
+
+[[bin]]
+name = "transform_all"
+path = "src/transform_all.rs"
+
 [dependencies]
 oxc = { path = "../oxc/crates/oxc", features = ["transformer", "codegen"] }
 ignore = "0.4.22"
