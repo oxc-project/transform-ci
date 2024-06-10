@@ -210,7 +210,7 @@ jobs:
         run: |
           FILE="./cal.com.tsx"
           # See https://man7.org/linux/man-pages/man1/time.1.html for formatting
-          hyperfine --warmup 10 --show-output "/usr/bin/time -f '%M line' ./transform $FILE" 2>&1 | grep "line" | tee output
+          hyperfine --warmup 10 --show-output "/usr/bin/time -f '%M line' ./transform $FILE" 2>&1 | grep "line" | > output
           TOTAL=$(awk '{ one += $1; } END { print one }' output)
           COUNT=$(wc -l output | awk '{ print $1 }')
           MAX_RSS=$(echo "$TOTAL $COUNT" | awk '{printf "%.1f", $1 / $2}')
@@ -236,6 +236,11 @@ jobs:
           echo $(jq ".[1].value = ${{ steps.memory.outputs.MAX_RSS }}" data.json) > data.json
           cat data.json
 
+      - id: ref
+        run: |
+          REF=$(git rev-parse HEAD)
+          echo "REF=$REF" >> $GITHUB_OUTPUT
+
       - uses: benchmark-action/github-action-benchmark@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -246,3 +251,4 @@ jobs:
           benchmark-data-dir-path: runtime
           auto-push: true
           save-data-file: true
+          ref: ${{ steps.ref.outputs.REF }}
