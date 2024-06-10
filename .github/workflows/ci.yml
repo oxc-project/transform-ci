@@ -208,8 +208,7 @@ jobs:
           ./transform $FILE
           /usr/bin/time -f '%M %t %K' ./transform $FILE
           # See https://man7.org/linux/man-pages/man1/time.1.html for formatting
-          hyperfine --warmup 10 --show-output "/usr/bin/time -f '%M %t %K' ./transform $FILE" 2>&1 | > output
-          # | > output
+          hyperfine --warmup 10 --show-output "/usr/bin/time -f '%M %t %K line' ./transform $FILE" 2>&1 | grep "line" | tee output
 
           cat output
 
