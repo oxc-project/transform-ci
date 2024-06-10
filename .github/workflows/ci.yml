@@ -180,7 +180,12 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: taiki-e/checkout-action@v1
+      - name: Checkout oxc
+        uses: actions/checkout@v4
+        with:
+          repository: oxc-project/oxc
+          ref: main
+          path: oxc
 
       - uses: taiki-e/install-action@hyperfine
 
@@ -214,6 +219,20 @@ jobs:
 
       - name: Create Data
         run: |
+          DATA='[
+              {
+                  "name": "Duration",
+                  "unit": "ms",
+                  "value": 0
+              },
+              {
+                  "name": "Maximum Resident Set Size",
+                  "unit": "Bytes",
+                  "value": 0
+              }
+          ]'
+          echo $DATA > runtime.json
+
           echo $(jq ".[0].value = ${{ steps.duration.outputs.DURATION }}" runtime.json) > data.json
           echo $(jq ".[1].value = ${{ steps.memory.outputs.MAX_RSS }}" data.json) > data.json
           cat data.json
