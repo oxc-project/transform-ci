@@ -10,8 +10,13 @@
         "value": 0
     },
     {
-        "name": "Cycles Elapsed",
-        "unit": "Cycles",
+        "name": "Average resident set size",
+        "unit": "Kbytes",
+        "value": 0
+    },
+    {
+        "name": "Average total (data+stack+text) memory use",
+        "unit": "Kbytes",
         "value": 0
     }
 ]
