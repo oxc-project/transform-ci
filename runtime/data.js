@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1718035300925,
+  "lastUpdate": 1718035929917,
   "repoUrl": "https://github.com/oxc-project/monitor-oxc",
   "entries": {
     "Transform Runtime Metrics": [
@@ -77,6 +77,40 @@ window.BENCHMARK_DATA = {
           {
             "name": "Maximum Resident Set Size",
             "value": 26907.1,
+            "unit": "Bytes"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "boshenc@gmail.com",
+            "name": "Boshen",
+            "username": "Boshen"
+          },
+          "committer": {
+            "email": "boshenc@gmail.com",
+            "name": "Boshen",
+            "username": "Boshen"
+          },
+          "distinct": true,
+          "id": "5f3d44c4ac9562827d2eacf8368842f02f60e43d",
+          "message": "wi",
+          "timestamp": "2024-06-11T00:10:32+08:00",
+          "tree_id": "ca76de9b688575c7256d876354ecc917f3a57d31",
+          "url": "https://github.com/oxc-project/monitor-oxc/commit/5f3d44c4ac9562827d2eacf8368842f02f60e43d"
+        },
+        "date": 1718035928960,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Duration",
+            "value": 0.041222133481971845,
+            "unit": "ms"
+          },
+          {
+            "name": "Maximum Resident Set Size",
+            "value": 27097,
             "unit": "Bytes"
           }
         ]
