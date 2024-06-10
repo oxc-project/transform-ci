@@ -205,34 +205,17 @@ jobs:
         id: memory
         run: |
           FILE="./cal.com.tsx"
-          ./transform $FILE
-          /usr/bin/time -f '%M %t %K' ./transform $FILE
           # See https://man7.org/linux/man-pages/man1/time.1.html for formatting
-          hyperfine --warmup 10 --show-output "/usr/bin/time -f '%M %t %K line' ./transform $FILE" 2>&1 | grep "line" | tee output
-
-          cat output
-
-          TOTAL=$(awk '{ one += $1; two += $2; three += $3 } END { print one, two, three }' output)
+          hyperfine --warmup 10 --show-output "/usr/bin/time -f '%M line' ./transform $FILE" 2>&1 | grep "line" | tee output
+          TOTAL=$(awk '{ one += $1; } END { print one }' output)
           COUNT=$(wc -l output | awk '{ print $1 }')
-
-          MAX_RSS=$(echo $TOTAL | awk '{ print $1 }')
-          AVERAGE_RSS=$(echo $TOTAL | awk '{ print $2 }')
-          AVERAGE_TOTAL_MEMORY=$(echo $TOTAL | awk '{ print $3 }')
-
-          MAX_RSS=$(echo "$MAX_RSS $COUNT" | awk '{printf "%.1f", $1 / $2}')
-          AVERAGE_RSS=$(echo "$AVERAGE_RSS $COUNT" | awk '{printf "%.1f", $1 / $2}')
-          AVERAGE_TOTAL_MEMORY=$(echo "$AVERAGE_RSS $COUNT" | awk '{printf "%.1f", $1 / $2}')
-
+          MAX_RSS=$(echo "$TOTAL $COUNT" | awk '{printf "%.1f", $1 / $2}')
           echo "MAX_RSS=$MAX_RSS" >> $GITHUB_OUTPUT
-          echo "AVERAGE_RSS=$AVERAGE_RSS" >> $GITHUB_OUTPUT
-          echo "AVERAGE_TOTAL_MEMORY=$AVERAGE_TOTAL_MEMORY" >> $GITHUB_OUTPUT
 
       - name: Create Data
         run: |
           echo $(jq ".[0].value = ${{ steps.duration.outputs.DURATION }}" runtime.json) > data.json
           echo $(jq ".[1].value = ${{ steps.memory.outputs.MAX_RSS }}" data.json) > data.json
-          echo $(jq ".[2].value = ${{ steps.memory.outputs.AVERAGE_RSS }}" data.json) > data.json
-          echo $(jq ".[3].value = ${{ steps.memory.outputs.AVERAGE_TOTAL_MEMORY }}" data.json) > data.json
           cat data.json
 
       - uses: benchmark-action/github-action-benchmark@v1

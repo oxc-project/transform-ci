@@ -8,15 +8,5 @@
         "name": "Maximum Resident Set Size",
         "unit": "Bytes",
         "value": 0
-    },
-    {
-        "name": "Average resident set size",
-        "unit": "Kbytes",
-        "value": 0
-    },
-    {
-        "name": "Average total (data+stack+text) memory use",
-        "unit": "Kbytes",
-        "value": 0
     }
 ]
