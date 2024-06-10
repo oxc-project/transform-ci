@@ -23,7 +23,7 @@ jobs:
   build:
     name: Build
     timeout-minutes: 10
-    runs-on: macos-14
+    runs-on: ubuntu-latest
     outputs:
       size: ${{ steps.run.outputs.BINARY_SIZE }}
     steps:
@@ -74,7 +74,7 @@ jobs:
   # checkout:
     # name: Read repos.json
     # needs: build
-    # runs-on: macos-14
+    # runs-on: ubuntu-latest
     # outputs:
       # matrix: ${{ steps.setmatrix.outputs.content }}
     # steps:
@@ -87,7 +87,7 @@ jobs:
   # test:
     # needs: checkout
     # timeout-minutes: 30
-    # runs-on: macos-14
+    # runs-on: ubuntu-latest
     # strategy:
       # fail-fast: false
       # matrix:
@@ -127,7 +127,7 @@ jobs:
 
   # compile-time:
     # name: Compile Time
-    # runs-on: macos-14
+    # runs-on: ubuntu-latest
     # if: ${{ github.ref_name == 'main' }}
     # outputs:
       # time: ${{ steps.run.outputs.COMPILE_TIME }}
@@ -154,7 +154,7 @@ jobs:
     # name: Monitor Metrics
     # needs: [build, compile-time]
     # if: ${{ github.ref_name == 'main' }}
-    # runs-on: macos-14
+    # runs-on: ubuntu-latest
     # steps:
       # - uses: taiki-e/checkout-action@v1
 
@@ -178,7 +178,7 @@ jobs:
   runtime:
     name: Measure runtime
     needs: build
-    runs-on: macos-14 # Mac M1; use the mac version of /usr/bin/time for cpu cycles
+    runs-on: ubuntu-latest
     steps:
       - uses: taiki-e/checkout-action@v1
 
@@ -189,76 +189,57 @@ jobs:
           name: transform
           path: .
 
-      - run: ls -lh
       - run: tar xf transform.tar.gz
-      - run: ls -lh
       - run: curl https://raw.githubusercontent.com/oxc-project/benchmark-files/main/cal.com.tsx > cal.com.tsx
 
-      # - name: Duration
-        # id: duration
-        # run: |
-          # FILE="./cal.com.tsx"
-          # hyperfine -i --warmup 10 --export-json output.json "./transform $FILE"
-          # DURATION=$(jq '.results[0].mean' output.json)
-          # echo $DURATION
-          # echo "DURATION=$DURATION" >> $GITHUB_OUTPUT
-
-      - name: Max RSS
-        id: rss
+      - name: Duration
+        id: duration
         run: |
           FILE="./cal.com.tsx"
-          /usr/bin/time -l ./transform $FILE
-          hyperfine --warmup 10 --show-output \
-            "/usr/bin/time -l ./transform $FILE" 2>&1 | \
-            grep "maximum resident set size" | \
-            awk '{ print $1 }' \
-            > output
+          hyperfine -i --warmup 10 --export-json output.json "./transform $FILE"
+          DURATION=$(jq '.results[0].mean' output.json)
+          echo $DURATION
+          echo "DURATION=$DURATION" >> $GITHUB_OUTPUT
+
+      - name: Measure Memory
+        id: memory
+        run: |
+          FILE="./cal.com.tsx"
+          # See https://man7.org/linux/man-pages/man1/time.1.html for formatting
+          hyperfine --warmup 10 --show-output "/usr/bin/time -f '%M %t %K' ./transform $FILE" 2>&1 | > output
 
           cat output
 
-          TOTAL=$(awk '{ total += $1 } END { print total }' output)
+          TOTAL=$(awk '{ one += $1; two += $2; three += $3 } END { print one, two, three }' output)
           COUNT=$(wc -l output | awk '{ print $1 }')
-          AVERAGE=$(echo "$TOTAL $COUNT" | awk '{printf "%.1f", $1 / $2}')
-          echo $AVERAGE
-          echo "RSS=$AVERAGE" >> $GITHUB_OUTPUT
 
-      - name: Cycles Elapsed
-        id: cycles
+          MAX_RSS=$(echo $TOTAL | awk '{ print $1 }')
+          AVERAGE_RSS=$(echo $TOTAL | awk '{ print $2 }')
+          AVERAGE_TOTAL_MEMORY=$(echo $TOTAL | awk '{ print $3 }')
+
+          MAX_RSS=$(echo "$MAX_RSS $COUNT" | awk '{printf "%.1f", $1 / $2}')
+          AVERAGE_RSS=$(echo "$AVERAGE_RSS $COUNT" | awk '{printf "%.1f", $1 / $2}')
+          AVERAGE_TOTAL_MEMORY=$(echo "$AVERAGE_RSS $COUNT" | awk '{printf "%.1f", $1 / $2}')
+
+          echo "MAX_RSS=$MAX_RSS" >> $GITHUB_OUTPUT
+          echo "AVERAGE_RSS=$AVERAGE_RSS" >> $GITHUB_OUTPUT
+          echo "AVERAGE_TOTAL_MEMORY=$AVERAGE_TOTAL_MEMORY" >> $GITHUB_OUTPUT
+
+      - name: Create Data
         run: |
-          FILE="./cal.com.tsx"
-          /usr/bin/time -l ./transform $FILE
-          hyperfine --warmup 10 --show-output \
-            "/usr/bin/time -l ./transform $FILE" 2>&1 | \
-            grep "cycles elapsed" | \
-            awk '{ print $1 }' \
-            > output
+          echo $(jq ".[0].value = ${{ steps.duration.outputs.DURATION }}" runtime.json) > data.json
+          echo $(jq ".[1].value = ${{ steps.memory.outputs.MAX_RSS }}" data.json) > data.json
+          echo $(jq ".[2].value = ${{ steps.memory.outputs.AVERAGE_RSS }}" data.json) > data.json
+          echo $(jq ".[3].value = ${{ steps.memory.outputs.AVERAGE_TOTAL_MEMORY }}" data.json) > data.json
+          cat data.json
 
-          cat output
-
-          TOTAL=$(awk '{ total += $1 } END { print total }' output)
-          COUNT=$(wc -l output | awk '{ print $1 }')
-
-          echo $TOTAL
-          echo $COUNT
-
-          AVERAGE=$(echo "$TOTAL $COUNT" | awk '{printf "%.1f", $1 / $2}')
-          echo $AVERAGE
-          echo "CYCLES=$AVERAGE" >> $GITHUB_OUTPUT
-
-      # - name: Create Data
-        # run: |
-          # echo $(jq ".[0].value = ${{ steps.duration.outputs.DURATION }}" runtime.json) > data.json
-          # echo $(jq ".[1].value = ${{ steps.rss.outputs.RSS }}" data.json) > data.json
-          # echo $(jq ".[2].value = ${{ steps.cycles.outputs.CYCLES }}" data.json) > data.json
-          # cat data.json
-
-      # - uses: benchmark-action/github-action-benchmark@v1
-        # with:
-          # github-token: ${{ secrets.GITHUB_TOKEN }}
-          # name: Transform Runtime Metrics
-          # tool: customSmallerIsBetter
-          # output-file-path: data.json
-          # gh-pages-branch: gh-pages
-          # benchmark-data-dir-path: runtime
-          # auto-push: true
-          # save-data-file: true
+      - uses: benchmark-action/github-action-benchmark@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          name: Transform Runtime Metrics
+          tool: customSmallerIsBetter
+          output-file-path: data.json
+          gh-pages-branch: gh-pages
+          benchmark-data-dir-path: runtime
+          auto-push: true
+          save-data-file: true
